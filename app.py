@@ -83,16 +83,7 @@ st.write(f"🪙 **Puan** {st.session_state.coins}")
 
 st.sidebar.subheader("Görev Ekle")
 
-with st.sidebar.form(key="task_form", clear_on_submit= True):
-    new_task = st.sidebar.text_input("Yeni görev yaz", key="new_task_input")
 
-    submit_button = st.form_submit_button("Görevi ekle")
-
-    if submit_button:
-        if new_task.strip() != "":
-            st.session_state.tasks.append(new_task)
-            st.sidebar.success(f"Görev eklendi: **{new_task}**")
-        
 
 
 
@@ -182,7 +173,7 @@ elif st.session_state.pomodoro_start_time is not None:
                 if st.session_state.active_task in st.session_state.tasks:
                     st.session_state.tasks.remove(st.session_state.active_task)
 
-                st.session_state.completed_tasks.append(st.session_state.active_task)
+                
                 st.session_state.active_task = None
                 st.session_state.pomodoro_start_time = None
                 st.sidebar.success(f" Görev tamamlandı! + {earned_coins} puan kazandın.")
@@ -308,21 +299,27 @@ def predict_optimal_duration(probabilities, total_tasks):
 if st.sidebar.button("Pomodoro Başlat" , key= "start_pomodoro_button"):
     st.session_state.active_task = selected_task
 
-    current_probabilities = st.session_state.get('last_probabilities', {"belirsiz": 1.0,
-     "yorgun" : 0.0,
-     "isteksiz": 0.0,
-     "kaygılı":0.0        
-     })
-    total_tasks = len(st.session_state.tasks)
+    user_selected_min = st.session_state.get("pomodoro_minutes", 25)
+    user_selected_sec = user_selected_min * 60
+    
+    current_probabilities= st.session_state.get('last_probabilities', {"belirsiz": 1.0, "yorgun": 0.0, "isteksiz": 0.0, "kaygılı": 0.0})
 
-    predicted_duration_sec = predict_optimal_duration(current_probabilities, total_tasks)
+    kaygi_etkisi = current_probabilities.get("kaygılı", 0) * 300 # Max 5 dk azaltır
+    yorgunluk_etkisi = current_probabilities.get("yorgun", 0) * 300 # Max 5 dk azaltır
 
-    predicted_minutes = int(round(predicted_duration_sec / 60))
+    final_duration = user_selected_sec - kaygi_etkisi - yorgunluk_etkisi
+    final_duration = max(300, final_duration)
+
+
+    
 
     st.session_state.pomodoro_start_time = time.time()
-    st.session_state.pomodoro_duration = predicted_duration_sec
+    st.session_state.pomodoro_duration = final_duration
 
-    st.sidebar.success(f" YZ Optimizasyonu: Optimal süre**{predicted_minutes}dk** olarak ayarlandı.Pomodoro başladı: **{selected_task}**")
+    predicted_minutes = int(round(final_duration / 60))
+
+
+    st.sidebar.success(f" Hedef : {predicted_minutes}dk olarak ayarlandı.Başarılar")
 
     st.rerun()
 
@@ -381,24 +378,34 @@ if submit and user_input:
             kazanilan_puan = 10
             st.session_state.coins += kazanilan_puan
 
+            last_probabilities = st.session_state.get("last_probabilities", {"belirsiz": 1.0})
+            baskin_duygu = max(last_probabilities, key=last_probabilities)
+
+            tebrik_sozleri ={
+                "yorgun":f"İnanılmazsın! Gözlerinden yorgunluğun hissedilirken bile **{tamamlanan_gorev}** artık bitti ve omuzlarından bir yük kalktı.",
+                "kaygılı":f"O kadar endişeye rağmen harika bir iş çıkardın **{tamamlanan_gorev}** artık bitti ",
+                "isteksiz":f"İşte bu! Hiç canın istemiyordu ama görevini tamamladın.Tebrik ederim",
+                "belirsiz":f"harika! Bir adımı daha başarıyla tamamladın."
+
+            }
+
+            ozel_tebrik = tebrik_sozleri.get(baskin_duygu, "Harika bir iş çıkardın!")
+
+            st.session_state.messages.append(
+                {"role":"Asistan","content": f"🎯 **GÖREV TAMAMLANDI!** \n\n{ozel_tebrik} \n\n Hesabına **{kazanilan_puan} puan** ekledim. Yeni bir hedefe geçmeye hazır mısın?"}
+            )
+
+
+
             st.session_state.active_task = None
             st.session_state.pomodoro_start_time = None
 
-            st.session_state.messages.append(
-                {"role":"Asistan","content": f"Tebrikler! **{tamamlanan_gorev}** görevini bitirdiğin için **{kazanilan_puan} puan** kazandın. Yeni bir göreve odaklanmaya hazır mısın?" }
-            )
+            
             st.balloons()
             st.rerun()
             gorev_tamamlandi = True
         
-        else:
-            st.session_state.messages.append(
-                {"role":"Asistan","content":"Harika! Ancak hangi görevi tamamladığını listeden kaldırmam için bana söylemen gerekiyor.Yeni görev eklemek ister misin?"}
-            )
-
-            gorev_tamamlandı = True
-            st.rerun()
-
+        
     if gorev_tamamlandi:
         pass
 
@@ -414,48 +421,66 @@ if submit and user_input:
         st.session_state['last_probabilities'] = probabilities
 
         baskin_duygu_skor = int(probabilities[emotion] * 100)
-        
-        # HİBRİT KAYGI + YORGUNLUK
-        if probabilities["kaygılı"] > 0.2 and probabilities["yorgun"]> 0.2:
-            cevap =(
-                f" ** YZ:Tespiti: Hibrit Durum.** Yüksek oranda Kaygı(%{int(probabilities['kaygılı'] * 100)} ve Yorgunluk(%{int(probabilities['yorgun'] * 100)}) tespit ettim. "
-                "Önce 5 dakikalık hızlı bir mola verelim(Yorgunluk), ardından görevi parçalara bölelim(Kaygı)."
-            )
-        # YÜKSEK KAYGI
-        elif st.session_state.tasks and probabilities["kaygılı"]> 0.3:
-            gorev_baslangici = st.session_state.tasks[0]
-            cevap = f" **YZ Tespiti:** Yüksek oranda Kaygı (%{baskin_duygu_skor}) tespit ettim.Hadi listendeki **{gorev_baslangici}** görevini hemen 3 küçük parçaya bölerek başla! "
-        # YORGUNLUK + İSTEKSİZLİK RİSKİ
-        elif probabilities["yorgun"] > 0.2 and probabilities["isteksiz"]> 0.2:
-            yorgunluk_skor = int(probabilities['yorgun']* 100)
-            isteksizlik_skor = int(probabilities['isteksiz'] * 100)
 
-            cevap = (f" **YZ Tespiti: Tükenmişlik Riski** Yorgunluk (%{yorgunluk_skor}) ve İsteksizlik(%{isteksizlik_skor}) tespit ettim."
-            "Bu , motivasyonun tamamen düşmek üzere olduğu anlamına geliyor. Önce kısa bir mola ve ardından **en kolay işi seçip** 5 dakika başlama kuralını uygulayalım. "
-            )
+        CHITCHAT_REFLEX = {
+            "selam": "Selam! Seni gördüğüme sevindi. Bugün modun nasıl? Planların üzerinden beraber geçelim mi?",
+            "nasılsın": "Seni desteklemek için sabırsızlanıyorum.Senin enerjin ne kadar yüksek olursa ben de o kadar iyi hissediyorum.Sen nasılsın? ",
+            "teşekkür":"Rica ederim, her zaman yanındayım Başka ne yapabiliriz?",
+            "yapabiliriz": "Harika bir enerji! Hemen listene bakalım mı yoksa yeni bir hedef mi eklemek istersin?"
 
-        # YÜKSEK YORGUNLUK
-        elif probabilities["yorgun"] > 0.5:
-            cevap = f" **YZ Tespiti:** Baskın duygun Yorgunluk (%{baskin_duygu_skor}). Enerjin %50 nin altına düşmüş. Lütfen Pomodoroyu durdurup **kısa bir mola** ver."
-        
-        # DİĞER DURUMLAR (İSTEKSİZ, DÜŞÜK KAYGI/YORGUNLUK)
+
+        }
+
+        intro_sentences ={
+                "yorgun": "Yazından biraz yorgun olduğunu hissediyorum, ama dert etme; hepimiz bazen tükenmiş hissedebiliriz. ",
+                "kaygılı":"Şu an zihnin biraz kalabalıklaşmış sanki, gel bu karmaşayı beraber çözelim",
+                "isteksiz":  "Bazen başlamak, bitirmekten daha zordur.Bugün o ilk adımı atmanda sana yardım edeceğim.",
+                "belirsiz": "Kafanın biraz karışık olması çok normal.Netleşmek için küçük bir adıma ne dersin?"
+             }
+
+        sohbet_yaniti = None
+        for anahtar in CHITCHAT_REFLEX:
+            if anahtar in user_input.lower():
+                sohbet_yaniti = CHITCHAT_REFLEX[anahtar]
+                break
+
+        if sohbet_yaniti:
+            cevap = sohbet_yaniti
+
         else:
-            if baskin_duygu_skor > 30:
-                yz_raporu= f" **YZ Tespiti:** Baskın duygun **{emotion.upper()}** (%{baskin_duygu_skor})."
+            base_intro = intro_sentences.get(emotion, "Anladım, seni çok iyi duyabiliyorum.")
+            if probabilities["kaygılı"] > 0.2 and probabilities["yorgun"]> 0.2:
 
-                destek_mesaji = random.choice(SUPPORT_MESSAGES.get(emotion, ["Harika gidiyorsun! Devam et."]))
-                cevap = f"{yz_raporu} {destek_mesaji}" 
+                cevap = f"{base_intro} Hem biraz yorulmuşsun hem de zihnin yapılacaklarla dolu. Önce derin bir nefes al, 5 dakikalık mola verelim, sonra işleri küçültürüz."
+
+
+
+            elif probabilities["yorgun"] > 0.5:  
+                cevap = f"{base_intro} Enerjin %{baskin_duygu_skor} seviyelerine düşmüş gibi duruyor. Kendine çok yüklenme, kısa bir mola her şeyi değiştirebilir."
+
+            elif emotion == "isteksiz":
+                cevap = f"{base_intro} Bazen o ilk adımı atmak dağın zirvesine tırmanmak gibi gelir. Ama başladığında su gibi akacak."
+
+            elif emotion == "kaygılı":
+                cevap = f"{base_intro} Şu an her şey üst üste gelmiş gibi hissediyor olabilirsin. Gel listeyi beraber parçalayalım."
+
+            elif emotion == "belirsiz":
+                cevap = f"{base_intro} Kararsız kalmak enerjini tüketir. En küçük görevden başlayalım, yol kendiliğinden aydınlanacaktır."
+
             else:
-                cevap = random.choice(SUPPORT_MESSAGES.get("belirsiz",["Harika gidiyorsun! Devam et."]))
+                cevap = base_intro
+
+            destek_mesaji = random.choice(SUPPORT_MESSAGES.get(emotion, ["Harika bir potansiyele sahipsin, sadece odaklanmaya ihtiyacın var."]))
+            cevap = f"{base_intro} {destek_mesaji}"
 
         st.session_state.messages.append(
             {"role": "Asistan","content": cevap}
         )
         
-        # 2. Mini Görevleri Ekle (DOĞRU DÖNGÜ KAPSAMI)
-        for task in MINI_TASKS[emotion]: 
-            st.session_state.messages.append(
-                {"role": "Asistan", "content": f"-> {task}"}
+        if not sohbet_yaniti:
+            for task in MINI_TASKS.get(emotion, []): 
+               st.session_state.messages.append(
+                {"role": "Asistan", "content": f"->  Önerim:  {task}"}
             )
         
         # 3. Arayüzü Güncelle
