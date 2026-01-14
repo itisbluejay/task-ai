@@ -16,3 +16,5 @@ bir **Yapay Zeka (YZ) tabanlı verimlilik asistanıdır.**
 
 ## Canlı Demo
 Uygulamayı buradan deneyebilirsiniz:  https://task-ai-motive1.streamlit.app/
+
+(Projemizin MVP versiyonunda hız ve kararlılık için kural tabanlı NLP kullanılmıştır. 2. fazda, modelimiz BERTurk (Turkish BERT) mimarisine taşınarak duygu analizi derinliği artırılacaktır.)
