@@ -420,7 +420,7 @@ if submit and user_input:
                 st.balloons()
                 st.rerun()
 
-    elif "evet" in user_input.lower() or "isterim" in user_input.lower():
+    elif "evet" in user_input.lower() or "isterim" in user_input.lower() or "Evet" in user_input.lower() or "İsterim" in user_input.lower():
 
         last_probs = st.session_state.get('last_probabilities', {"belirsiz": 1.0})
         emotion = max(last_probs, key=last_probs.get)
@@ -441,7 +441,8 @@ if submit and user_input:
             "nasılsın": "Seni desteklemek için sabırsızlanıyorum.Senin enerjin ne kadar yüksek olursa ben de o kadar iyi hissediyorum.Sen nasılsın? ",
             "teşekkür":"Rica ederim, her zaman yanındayım Başka ne yapabiliriz?",
             "yapabiliriz": "Harika bir enerji! Hemen listene bakalım mı yoksa yeni bir hedef mi eklemek istersin?",
-           "merhaba": "Merhaba! Sana nasıl yardımcı olabilirim? Bugün neler yapıyoruz?"
+           "merhaba": "Merhaba! Sana nasıl yardımcı olabilirim? Bugün neler yapıyoruz?",
+           "iyiyim":"İyi olmana sevindim."
            
             }
 
